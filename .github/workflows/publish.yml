@@ -1,0 +1,44 @@
+name: Instagram Trial Reels scheduler
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"      # cada 5 min (GitHub puede demorar unos minutos)
+  workflow_dispatch:            # botón para disparar a mano (prueba)
+
+permissions:
+  contents: write               # para commitear published.json
+
+concurrency:
+  group: ig-publish             # nunca corren dos a la vez
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install --quiet boto3
+      - name: Publicar pendientes
+        id: run
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          GRAPH_API_VERSION: ${{ secrets.GRAPH_API_VERSION }}
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: python publish.py
+      - name: Guardar registro (published.json)
+        if: steps.run.outputs.changed == 'true'
+        run: |
+          git config user.name "egs-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add published.json
+          git commit -m "registro: publicaciones nuevas" || echo "sin cambios"
+          git push
